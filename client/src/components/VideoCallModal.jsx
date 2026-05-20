@@ -1,26 +1,32 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 
+// ICE servers: STUN for same-network, TURN for cross-network (required in production)
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    // Free TURN servers from OpenRelay (required for cross-network calls)
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    // Metered.ca free TURN servers (most reliable free option)
     {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turn:a.relay.metered.ca:80',
+      username: 'e7c0a9fd32e9ec246c61c79c',
+      credential: 'a0xwZmFuadX3mhHB',
     },
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+      username: 'e7c0a9fd32e9ec246c61c79c',
+      credential: 'a0xwZmFuadX3mhHB',
     },
     {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turn:a.relay.metered.ca:443',
+      username: 'e7c0a9fd32e9ec246c61c79c',
+      credential: 'a0xwZmFuadX3mhHB',
+    },
+    {
+      urls: 'turn:a.relay.metered.ca:443?transport=tcp',
+      username: 'e7c0a9fd32e9ec246c61c79c',
+      credential: 'a0xwZmFuadX3mhHB',
     },
   ],
   iceCandidatePoolSize: 10,
@@ -31,19 +37,34 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
-  const closedRef = useRef(false); // prevent double-cleanup
+  const closedRef = useRef(false);
+  // Buffer ICE candidates that arrive before remoteDescription is set
+  const iceCandidateBuffer = useRef([]);
+  const remoteDescSet = useRef(false);
 
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [status, setStatus] = useState(initialOffer ? 'connecting' : 'calling');
   const [duration, setDuration] = useState(0);
 
-  // ── Guaranteed cleanup — stops ALL camera/mic tracks ──────────────────────
+  // Apply buffered ICE candidates after remote description is set
+  const drainIceCandidates = useCallback(async (pc) => {
+    const buffered = iceCandidateBuffer.current.splice(0);
+    for (const candidate of buffered) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('[WebRTC] Applied buffered ICE candidate');
+      } catch (e) {
+        console.warn('[WebRTC] Failed to apply buffered ICE candidate:', e.message);
+      }
+    }
+  }, []);
+
+  // ── Guaranteed cleanup ────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
     if (closedRef.current) return;
     closedRef.current = true;
 
-    // 1. Stop every media track so the browser camera light goes off
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -52,31 +73,24 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
       localStreamRef.current = null;
     }
 
-    // 2. Clear video elements
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
-    // 3. Close RTCPeerConnection
     if (pcRef.current) {
       pcRef.current.ontrack = null;
       pcRef.current.onicecandidate = null;
       pcRef.current.onconnectionstatechange = null;
+      pcRef.current.oniceconnectionstatechange = null;
       pcRef.current.close();
       pcRef.current = null;
     }
 
-    // 4. Remove socket listeners
     socket.off('webrtc:call-accepted');
     socket.off('webrtc:ice-candidate');
     socket.off('webrtc:call-ended');
     socket.off('webrtc:call-rejected');
   }, [socket]);
 
-  // Ensure cleanup ALWAYS runs when component unmounts
   useEffect(() => {
     return () => cleanup();
   }, [cleanup]);
@@ -90,7 +104,7 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
 
   const fmt = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // ── Start WebRTC ───────────────────────────────────────────────────────────
+  // ── Start WebRTC ──────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -107,32 +121,56 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
 
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
+        // When remote video arrives
         pc.ontrack = (event) => {
+          console.log('[WebRTC] Remote track received');
           if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
           setStatus('connected');
         };
 
+        // Send our ICE candidates to the other peer
         pc.onicecandidate = ({ candidate }) => {
-          if (candidate) socket.emit('webrtc:ice-candidate', { to: targetUser.id, candidate });
+          if (candidate) {
+            console.log('[WebRTC] Sending ICE candidate');
+            socket.emit('webrtc:ice-candidate', { to: targetUser.id, candidate });
+          }
+        };
+
+        // Log ICE gathering state
+        pc.onicegatheringstatechange = () => {
+          console.log('[WebRTC] ICE gathering state:', pc.iceGatheringState);
+        };
+
+        // Log ICE connection state (more granular than connectionState)
+        pc.oniceconnectionstatechange = () => {
+          console.log('[WebRTC] ICE connection state:', pc.iceConnectionState);
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            setStatus('connected');
+          }
         };
 
         pc.onconnectionstatechange = () => {
           const state = pc.connectionState;
           console.log('[WebRTC] Connection state:', state);
-          // 'disconnected' is temporary (network hiccup), only end on permanent failure
           if (state === 'failed' || state === 'closed') {
             setStatus('ended');
             cleanup();
-            setTimeout(onClose, 1200);
+            setTimeout(onClose, 1500);
           }
         };
 
+        // ── CALLEE: Got an offer, send back an answer ──
         if (initialOffer) {
           await pc.setRemoteDescription(new RTCSessionDescription(initialOffer));
+          remoteDescSet.current = true;
+          await drainIceCandidates(pc);
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket.emit('webrtc:accept-call', { to: targetUser.id, answer });
-        } else {
+        }
+        // ── CALLER: Create offer and wait for answer ──
+        else {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket.emit('webrtc:call-user', {
@@ -141,20 +179,34 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
             fromName: currentUser.name,
             offer,
           });
+
+          socket.on('webrtc:call-accepted', async ({ answer }) => {
+            try {
+              if (pc.signalingState !== 'have-local-offer') return;
+              await pc.setRemoteDescription(new RTCSessionDescription(answer));
+              remoteDescSet.current = true;
+              await drainIceCandidates(pc);
+              setStatus('connected');
+            } catch (e) {
+              console.error('[WebRTC] Error setting remote answer:', e);
+            }
+          });
         }
 
-        socket.on('webrtc:call-accepted', async ({ answer }) => {
-          try {
-            if (pc.signalingState !== 'have-local-offer') return;
-            await pc.setRemoteDescription(new RTCSessionDescription(answer));
-            setStatus('connected');
-          } catch (e) {
-            console.error('Call accepted error:', e);
-          }
-        });
-
+        // ── ICE candidates from the other peer ──
+        // Buffer them if remote description isn't set yet
         socket.on('webrtc:ice-candidate', async ({ candidate }) => {
-          try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+          if (!candidate) return;
+          if (remoteDescSet.current && pcRef.current) {
+            try {
+              await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+              console.warn('[WebRTC] Failed to add ICE candidate:', e.message);
+            }
+          } else {
+            console.log('[WebRTC] Buffering ICE candidate (remote desc not set yet)');
+            iceCandidateBuffer.current.push(candidate);
+          }
         });
 
         socket.on('webrtc:call-ended', () => {
@@ -170,7 +222,7 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
         });
 
       } catch (err) {
-        console.error('Video call error:', err.message);
+        console.error('[WebRTC] Fatal error:', err.message);
         setStatus('error');
       }
     };
