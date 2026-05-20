@@ -1,36 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 
-// ICE servers: STUN for same-network, TURN for cross-network (required in production)
-const ICE_SERVERS = {
+const BACKEND_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://skill-bridge-zcin.onrender.com' : 'http://localhost:5000');
+
+const FALLBACK_ICE = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    // Metered.ca free TURN servers (most reliable free option)
-    {
-      urls: 'turn:a.relay.metered.ca:80',
-      username: 'e7c0a9fd32e9ec246c61c79c',
-      credential: 'a0xwZmFuadX3mhHB',
-    },
-    {
-      urls: 'turn:a.relay.metered.ca:80?transport=tcp',
-      username: 'e7c0a9fd32e9ec246c61c79c',
-      credential: 'a0xwZmFuadX3mhHB',
-    },
-    {
-      urls: 'turn:a.relay.metered.ca:443',
-      username: 'e7c0a9fd32e9ec246c61c79c',
-      credential: 'a0xwZmFuadX3mhHB',
-    },
-    {
-      urls: 'turn:a.relay.metered.ca:443?transport=tcp',
-      username: 'e7c0a9fd32e9ec246c61c79c',
-      credential: 'a0xwZmFuadX3mhHB',
-    },
   ],
   iceCandidatePoolSize: 10,
 };
+
+async function fetchIceConfig() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/ice-servers`);
+    if (!res.ok) throw new Error('Failed to fetch ICE servers');
+    const servers = await res.json();
+    console.log('[WebRTC] Fetched ICE servers:', servers.length, 'entries');
+    return { iceServers: servers, iceCandidatePoolSize: 10 };
+  } catch (e) {
+    console.warn('[WebRTC] Using fallback ICE config:', e.message);
+    return FALLBACK_ICE;
+  }
+}
 
 export default function VideoCallModal({ socket, currentUser, targetUser, initialOffer, onClose }) {
   const localVideoRef = useRef(null);
@@ -110,13 +102,14 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
 
     const start = async () => {
       try {
+        const iceConfig = await fetchIceConfig();
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
 
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-        const pc = new RTCPeerConnection(ICE_SERVERS);
+        const pc = new RTCPeerConnection(iceConfig);
         pcRef.current = pc;
 
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
