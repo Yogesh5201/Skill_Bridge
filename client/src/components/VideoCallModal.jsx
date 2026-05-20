@@ -63,7 +63,7 @@ export default function VideoCallModal({ socket, currentUser, targetUser, onClos
             SHOW_CHROME_EXTENSION_BANNER: false,
           }}
           userInfo={{
-            displayName: currentUser.name,
+            displayName: currentUser.name || 'User',
           }}
           onApiReady={(externalApi) => {
             // Automatically end our side if we leave the meeting via Jitsi UI
