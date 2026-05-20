@@ -53,8 +53,8 @@ export default function App() {
     });
 
     // Listen for incoming calls globally
-    s.on('webrtc:incoming-call', ({ from, fromName, offer }) => {
-      setIncomingCall({ from, fromName, offer });
+    s.on('webrtc:incoming-call', ({ from, fromName }) => {
+      setIncomingCall({ from, fromName });
     });
 
     return () => s.disconnect();
@@ -64,7 +64,6 @@ export default function App() {
     if (!incomingCall) return;
     setActiveCall({
       targetUser: { id: incomingCall.from, name: incomingCall.fromName },
-      offer: incomingCall.offer,
     });
     setIncomingCall(null);
   };
@@ -95,7 +94,6 @@ export default function App() {
           socket={socket}
           currentUser={currentUser}
           targetUser={activeCall.targetUser}
-          initialOffer={activeCall.offer}
           onClose={() => setActiveCall(null)}
         />
       )}

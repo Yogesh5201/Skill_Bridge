@@ -15,7 +15,6 @@ const skillRoutes = require('./routes/skillRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const meetingRoutes = require('./routes/meetingRoutes');
 const documentRoutes = require('./routes/documentRoutes');
-const iceRoutes = require('./routes/iceRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -60,7 +59,6 @@ app.use('/api/skills', skillRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/documents', documentRoutes);
-app.use('/api/ice-servers', iceRoutes);
 
 // Health check
 app.get('/', async (req, res) => {

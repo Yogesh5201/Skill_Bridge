@@ -46,6 +46,15 @@ export default function ChatBox({ currentUser, otherUser, onClose }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleStartCall = () => {
+    socket?.emit('webrtc:call-user', {
+      to: otherUser.id,
+      from: currentUser.id,
+      fromName: currentUser.name,
+    });
+    setInCall(true);
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -133,7 +142,7 @@ export default function ChatBox({ currentUser, otherUser, onClose }) {
               </div>
 
               <button
-                onClick={() => setInCall(true)}
+                onClick={handleStartCall}
                 className="flex items-center gap-2 px-4 py-2 bg-[#00c3ff]/10 border border-[#00c3ff]/30 text-[#00c3ff] rounded-xl text-sm font-bold hover:bg-[#00c3ff]/20 transition"
               >
                 <Video className="w-4 h-4" /> Video Call
@@ -171,7 +180,7 @@ export default function ChatBox({ currentUser, otherUser, onClose }) {
 
               <div className="space-y-2">
                 <button
-                  onClick={() => setInCall(true)}
+                  onClick={handleStartCall}
                   className="w-full flex items-center gap-3 p-3 bg-[#111] border border-gray-800 rounded-xl text-sm text-gray-300 hover:text-white hover:border-[#00c3ff]/30 transition"
                 >
                   <Video className="w-4 h-4 text-[#00c3ff]" /> Start Video Call
@@ -342,7 +351,6 @@ export default function ChatBox({ currentUser, otherUser, onClose }) {
           socket={socket}
           currentUser={currentUser}
           targetUser={otherUser}
-          initialOffer={null}
           onClose={() => setInCall(false)}
         />
       )}
