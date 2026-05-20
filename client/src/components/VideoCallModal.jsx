@@ -124,8 +124,13 @@ export default function VideoCallModal({ socket, currentUser, targetUser, initia
         }
 
         socket.on('webrtc:call-accepted', async ({ answer }) => {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          setStatus('connected');
+          try {
+            if (pc.signalingState !== 'have-local-offer') return;
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            setStatus('connected');
+          } catch (e) {
+            console.error('Call accepted error:', e);
+          }
         });
 
         socket.on('webrtc:ice-candidate', async ({ candidate }) => {
