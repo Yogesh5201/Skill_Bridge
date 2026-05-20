@@ -15,6 +15,7 @@ const skillRoutes = require('./routes/skillRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const meetingRoutes = require('./routes/meetingRoutes');
 const documentRoutes = require('./routes/documentRoutes');
+const livekitRoutes = require('./routes/livekitRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -59,6 +60,7 @@ app.use('/api/skills', skillRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/livekit', livekitRoutes);
 
 // Health check
 app.get('/', async (req, res) => {
