@@ -8,7 +8,7 @@ import { getMessages, sendMessage } from '../api/messageApi';
 import { uploadDocument, getDocuments, deleteDocument } from '../api/documentApi';
 import VideoCallModal from './VideoCallModal';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://skill-bridge-zcin.onrender.com' : 'http://localhost:5000');
 
 export default function ChatBox({ currentUser, otherUser, onClose }) {
   const [messages, setMessages] = useState([]);
