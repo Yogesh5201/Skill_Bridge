@@ -81,6 +81,7 @@ export default function App() {
       <AnimatePresence>
         {incomingCall && (
           <IncomingCallNotification
+            key="incoming-call-notification"
             caller={{ name: incomingCall.fromName, avatar: null }}
             onAccept={acceptCall}
             onReject={rejectCall}
