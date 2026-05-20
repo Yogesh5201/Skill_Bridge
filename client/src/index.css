@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+body {
+  background-color: #000000; /* Deep gray-950 for the pro dark mode */
+  color: #f3f4f6;
+}
+body, html {
+  margin: 0;
+  padding: 0;
+}
+/* https://prod.spline.design/6xKGuUTY1mR7NDbP/scene.splinecode */

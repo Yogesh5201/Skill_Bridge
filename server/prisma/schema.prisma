@@ -1,0 +1,126 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String            @id @default(uuid())
+  name             String
+  email            String            @unique
+  password         String
+  role             String            @default("USER") // USER, ADMIN
+  avatar           String?
+  bio              String?
+  teachingSkills   Skill[]           @relation("UserTeaches")
+  learningSkills   Skill[]           @relation("UserLearns")
+  teachesSummary   String?           // For quick display
+  wantsSummary     String?           // For quick display
+  rating           Float             @default(0.0)
+  numReviews       Int               @default(0)
+  
+  sentRequests     SwapRequest[]     @relation("Sender")
+  receivedRequests SwapRequest[]     @relation("Receiver")
+
+  sentMessages     Message[]         @relation("MessageSender")
+  receivedMessages Message[]         @relation("MessageReceiver")
+
+  notifications    Notification[]    @relation("UserNotification")
+
+  givenReviews     Review[]          @relation("Reviewer")
+  receivedReviews  Review[]          @relation("Reviewee")
+
+  reportsMade      Report[]          @relation("Reporter")
+  reportsReceived  Report[]          @relation("ReportedUser")
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Skill {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  category    String?
+  description String?
+
+  teachers    User[]   @relation("UserTeaches")
+  learners    User[]   @relation("UserLearns")
+
+  createdAt   DateTime @default(now())
+}
+
+model SwapRequest {
+  id          String   @id @default(uuid())
+  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED, COMPLETED
+  
+  senderId    String
+  sender      User     @relation("Sender", fields: [senderId], references: [id])
+  
+  receiverId  String
+  receiver    User     @relation("Receiver", fields: [receiverId], references: [id])
+
+  skillId     String?
+  
+  message     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  content     String
+  
+  senderId    String
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id])
+
+  receiverId  String
+  receiver    User     @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  read        Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  type        String   // REQUEST, MESSAGE, SYSTEM
+  content     String
+  read        Boolean  @default(false)
+  
+  userId      String
+  user        User     @relation("UserNotification", fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  rating      Int      // 1 to 5
+  comment     String?
+
+  reviewerId  String
+  reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id])
+
+  revieweeId  String
+  reviewee    User     @relation("Reviewee", fields: [revieweeId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  reason      String
+  status      String   @default("OPEN") // OPEN, REVIEWED, RESOLVED
+
+  reporterId  String
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
+
+  reportedId  String
+  reported    User     @relation("ReportedUser", fields: [reportedId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
